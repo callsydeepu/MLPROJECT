@@ -1,7 +1,7 @@
-import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -10,102 +10,83 @@ from src.exception import CustomException
 from src.logger import logging
 
 
-from pathlib import Path
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
 @dataclass
-class DataIngestionConfig():
-    artifacts_dir:str = PROJECT_ROOT / "Artifacts"
-    dataset_path:str = r"C:\Users\WELCOME\Desktop\MLPROJECTS\notebook\data\stud.csv"
-    train_file:str="train.csv"
-    test_file:str="test.csv"
-    raw_file:str="raw.csv"
-    test_size:float = 0.2
-    random_state:int =1
-    target_col :str ="math_score"
-    stratisfy :bool =False #disable for regression
+class DataIngestionConfig:
+    project_root: Path = Path(__file__).resolve().parents[2]
+    dataset_path: Path = Path("notebook/data/stud.csv")
 
-class DataIngestion():
-    def __init__(self,config:DataIngestionConfig=DataIngestionConfig()):
-        self.config=config
-    
-    def _ensure_artifacts_dir(self):
-        os.makedirs(self.config.artifacts_dir,exist_ok=True)
-    def _timestamped_path(self,filename:str):
-        ts=datetime.now().strftime("%Y%m%d_%H%M%S")
-        return os.path.join(self.config.artifacts_dir,f"{ts}_{filename}")
-    
-    def _validate_dataset(self,df:pd.DataFrame):
-        logging.info("Validating dataset structure...")
+    test_size: float = 0.2
+    random_state: int = 42
 
+    target_col: str = "math_score"
+    stratify: bool = False   # regression → False
+
+
+class DataIngestion:
+    def __init__(self, config: DataIngestionConfig = DataIngestionConfig()):
+        self.config = config
+
+    def _create_run_dir(self):
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = self.config.project_root / "artifacts" / ts
+        run_dir.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Run directory created at {run_dir}")
+        return run_dir
+
+    def _validate_dataset(self, df: pd.DataFrame):
         if df.empty:
-            raise ValueError("Data set is empty!!")
-        
+            raise ValueError("Dataset is empty")
+
         if self.config.target_col not in df.columns:
             raise ValueError(
-                f"target column '{self.config.target_col}' not found in dataset."
-                f"Available columns are : {df.columns}"
+                f"Target column '{self.config.target_col}' not found. "
+                f"Available columns: {list(df.columns)}"
             )
-        
-        missing=df.isna().sum()
-        if missing.sum() >0:
-            logging.warning(f"Dataset contains missing values:\n{missing}")
 
-        
-        #------main---------
-    def initiate_dataingestion(self):
-        logging.info("Data ingestion started")
-
+    def initiate_data_ingestion(self):
         try:
-            self._ensure_artifacts_dir()
+            logging.info("Starting data ingestion")
 
-            #--load__dataset
+            dataset_path = self.config.project_root / self.config.dataset_path
+            if not dataset_path.exists():
+                raise FileNotFoundError(f"Dataset not found at {dataset_path}")
 
-            if not os.path.exists(self.config.dataset_path):
-                raise FileNotFoundError(f"dataset not found")
-            
-            df=pd.read_csv(self.config.dataset_path)
-            logging.info(f"dataset loaded:Shape:{df.shape} ")
+            df = pd.read_csv(dataset_path)
+            logging.info(f"Dataset loaded with shape {df.shape}")
 
             self._validate_dataset(df)
 
-            raw_path=self._timestamped_path(self.config.raw_file)
-            df.to_csv(raw_path,index=False)
+            run_dir = self._create_run_dir()
 
-            logging.info(f"Raw dataset saved at {raw_path}")
+            # save raw
+            raw_path = run_dir / "raw.csv"
+            df.to_csv(raw_path, index=False)
 
-            #__split__
-            stratify_col=(
-                df[self.config.target_col] if self.config.stratisfy else None
+            stratify_col = df[self.config.target_col] if self.config.stratify else None
+
+            train_df, test_df = train_test_split(
+                df,
+                test_size=self.config.test_size,
+                random_state=self.config.random_state,
+                stratify=stratify_col
             )
 
-            train_df,test_df=train_test_split(df,
-                                              test_size=self.config.test_size,
-                                              random_state=self.config.random_state,
-                                              stratify=stratify_col)
-            
-            logging.info(
-                f"Train/Test split completed "
-                f"(train={train_df.shape}, test={test_df.shape})"
-            )
-            
-            train_path=self._timestamped_path(self.config.train_file)
-            test_path=self._timestamped_path(self.config.test_file)
+            train_path = run_dir / "train.csv"
+            test_path = run_dir / "test.csv"
 
-            df.to_csv(train_path,index=False)
-            df.to_csv(test_path,index=False)
+            train_df.to_csv(train_path, index=False)
+            test_df.to_csv(test_path, index=False)
 
-            logging.info(f"Train data saved at {train_path}")
-            logging.info(f"Test data saved at {test_path}")
             logging.info("Data ingestion completed successfully")
 
-            return train_path,test_path
+            return train_path, test_path, run_dir
+
         except Exception as e:
-            logging.error("DataIngestion failed")
-            raise CustomException(e,sys)
-        
-    
-if __name__=='__main__':
-    obj=DataIngestion()
-    obj.initiate_dataingestion()
-        
+            logging.esxception("Data transformation failed")
+            print("ACTUAL ERROR:", e)
+            raise CustomException(e, sys)
+
+
+# if __name__ == "__main__":
+#     obj = DataIngestion()
+#     obj.initiate_data_ingestion()

@@ -1,0 +1,111 @@
+EDA → Feature Engineering Decision Workflow
+
+STEP 1 — Missing Values Handling
+From EDA, check:
+% missing
+pattern of missingness
+whether missing = meaningful behavior
+Decisions:
+| EDA Finding                       | Action                               |
+| --------------------------------- | ------------------------------------ |
+| < 5–10% missing                   | simple imputation (mean/median/mode) |
+| 10–40% missing                    | group-based imputation               |
+| > 40–50% missing                  | drop or redesign                     |
+| missing itself indicates behavior | create **missing_flag feature**      |
+
+STEP 2 — Skewed Numerical Features
+Check:
+histograms
+skew score
+heavy tails
+
+| EDA Finding       | Action               |
+| ----------------- | -------------------- |
+| mild skew         | scale / standardize  |
+| strong right-skew | log / sqrt transform |
+| multimodal        | binning              |
+| narrow spread     | normalization        |
+
+
+STEP 3 — Outlier-Aware Engineering
+From boxplots + value ranges.
+| Case                      | Action                  |
+| ------------------------- | ----------------------- |
+| measurement error         | remove                  |
+| unrealistic extreme       | cap / winsorize         |
+| rare but valid            | create **outlier_flag** |
+| outliers dominate feature | transform               |
+
+
+STEP 4 — Categorical Feature Engineering
+Check:
+frequency distribution
+rare categories
+separation vs target
+
+| EDA Finding               | Action                |
+| ------------------------- | --------------------- |
+| balanced categories       | keep                  |
+| many low-frequency labels | merge → "OTHER"       |
+| strong target separation  | keep + encode         |
+| weak / random pattern     | drop                  |
+| ordinal pattern           | ordinal encode        |
+| high cardinality          | target / count encode |
+
+
+STEP 5 — Target Relationship Strength
+Use:
+boxplot → classification
+scatterplot → regression
+group means
+
+| Pattern                | Action                      |
+| ---------------------- | --------------------------- |
+| strong separation      | keep                        |
+| moderate trend         | create interaction features |
+| weak / random          | drop                        |
+| unstable across groups | regularize                  |
+
+
+STEP 6 — Multicollinearity & Redundancy
+Check correlation heatmap (> 0.8)
+
+| Case                         | Action                  |
+| ---------------------------- | ----------------------- |
+| duplicate info               | drop weaker feature     |
+| interpretable version exists | keep clearer one        |
+| combination adds value       | derive combined feature |
+
+STEP 7 — Time / Date Feature Engineering
+If timestamps exist:
+Possible features:
+year / month / week / hour
+time since last event
+is_weekend / holiday flags
+
+df["date"] = pd.to_datetime(df["date"])
+df["year"] = df["date"].dt.year
+df["month"] = df["date"].dt.month
+df["days_since_event"] = (df["date"].max() - df["date"]).dt.days
+
+
+STEP 8 — Interaction & Ratio Features (Only if EDA Justifies)
+Use when EDA shows:
+nonlinear relations
+multiplicative effects
+
+df["income_to_expense"] = df["income"] / (df["expenses"]+1)
+df["age_x_bmi"] = df["age"] * df["bmi"]
+
+STEP 9 — Drop Risky or Useless Features
+Drop when EDA reveals:
+ID-like fields
+highly sparse categories
+leakage from target
+unstable / biased fields
+strong redundancy
+weak random behavior
+This improves:
+generalization
+training stability
+interpretability
